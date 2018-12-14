@@ -40,6 +40,14 @@
     </joint>
    </xacro:macro>
 
+	<macro name="box_inertia" params="m x y z">
+	  <inertia
+		  ixx="${m*(y*y+z*z)/12}" ixy = "0" ixz = "0"
+	    iyy="${m*(x*x+z*z)/12}" iyz = "0"
+	    izz="${m*(x*x+y*y)/12}"
+	  />
+	</macro>
+
 	<xacro:macro name="cylinder_inertia" params="m r h">
 	  <inertia  
 			ixx="${m*(3*r*r+h*h)/12}" ixy = "0" ixz = "0"
@@ -47,6 +55,29 @@
 	    izz="${m*r*r/2}"
 	  />
 	</xacro:macro>
+
+	<macro name="box_link" params="name length width height mass color">
+		<link name="${name}">
+			<visual>
+				<origin xyz="0 0 0" rpy="0 0 0"/>
+				<geometry>
+					<box size="${length} ${width} ${height}"/>
+				</geometry>
+				<material name="${color}" />
+			</visual>
+			<collision>
+				<origin xyz="0 0 0" rpy="0 0 0" />
+				<geometry>
+					<box size="${length} ${width} ${height}"/>
+				</geometry>
+			</collision>
+			<inertial>
+				<origin xyz="0 0 0" rpy="0 0 0" />
+				<mass value="${mass}"/>
+				<box_inertia m="${mass}" x="${length}" y="${width}" z="${height}"/>
+			</inertial>
+		</link>
+	</macro>
 
 	<xacro:macro name="cylinder_link" params="name length radius mass color roll=0 pitch=${PI/2} yaw=${PI/2}">
 		<link name="${name}">
@@ -117,6 +148,7 @@
     </link>
 
     <cylinder_link name="laser_link" length="${laserHeight}" radius="${laserRadius}" mass="${laserMass}" color="${laserColor}" pitch="0" yaw="0" />
+    <box_link name="imu_link" length="0.03175" width="0.015875" height="0.0015875" mass="0.0283495" color="Yellow" />
 
     <link name="wall_sensor_link">
     <inertial>
@@ -169,6 +201,13 @@
         <axis xyz="0 0 1"/>
         <parent link="base_link"/>
         <child link="laser_link"/>
+    </joint>
+
+    <joint name="imu_joint" type="fixed">
+        <origin xyz="0 0 ${0.0254+0.03175}" rpy="0 0 0"/>
+        <axis xyz="0 0 0"/>
+        <parent link="base_link"/>
+        <child link="imu_link"/>
     </joint>
 
     <joint name="base_wall_sensor_joint" type="fixed">
