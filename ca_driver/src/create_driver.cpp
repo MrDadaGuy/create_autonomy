@@ -43,10 +43,13 @@ CreateDriver::CreateDriver(ros::NodeHandle& nh)
   priv_nh_.param<std::string>("dev", dev_, "/dev/ttyUSB0");
   priv_nh_.param<std::string>("robot_model", robot_model_name, "CREATE_2");
   priv_nh_.param<std::string>("base_frame", base_frame_, "base_footprint");
-  priv_nh_.param<std::string>("odom_frame", odom_frame_, "odom");
+  priv_nh_.param<std::string>("odom_frame", odom_frame_, "odom"); 
   priv_nh_.param<double>("latch_cmd_duration", latch_duration_, 0.2);
   priv_nh_.param<double>("loop_hz", loop_hz_, 10.0);
   priv_nh_.param<bool>("publish_tf", publish_tf_, true);
+
+  // 12.6.2018 - adding value for covariance matrix fix
+  priv_nh_.param<double>("default_covariance", default_covariance_, 1.0);
 
   if (robot_model_name == "ROOMBA_400")
   {
@@ -121,9 +124,10 @@ CreateDriver::CreateDriver(ros::NodeHandle& nh)
   undock_sub_ = nh.subscribe("undock", 10, &CreateDriver::undockCallback, this);
   define_song_sub_ = nh.subscribe("define_song", 10, &CreateDriver::defineSongCallback, this);
   play_song_sub_ = nh.subscribe("play_song", 10, &CreateDriver::playSongCallback, this);
+  set_mode_sub_ = nh.subscribe("set_mode", 10, &CreateDriver::setModeCallback, this);
 
   // Setup publishers
-  odom_pub_ = nh.advertise<nav_msgs::Odometry>("odom", 30);
+  odom_pub_ = nh.advertise<nav_msgs::Odometry>(odom_frame_, 30); // 2018.12.5 - changed to have topic name match frame name
   clean_btn_pub_ = nh.advertise<std_msgs::Empty>("clean_button", 30);
   day_btn_pub_ = nh.advertise<std_msgs::Empty>("day_button", 30);
   hour_btn_pub_ = nh.advertise<std_msgs::Empty>("hour_button", 30);
@@ -160,6 +164,32 @@ CreateDriver::~CreateDriver()
   ROS_INFO("[CREATE] Destruct sequence initiated.");
   robot_->disconnect();
   delete robot_;
+}
+
+void CreateDriver::setModeCallback(const std_msgs::UInt8ConstPtr& msg)
+{
+  switch (msg->data)
+  {
+    case 0:
+      ROS_INFO("[CREATE] SetMode 0 (Off)");
+      robot_->setMode(create::MODE_OFF);
+      break;
+    case 1:
+      ROS_INFO("[CREATE] SetMode 1 (Passive)");
+      robot_->setMode(create::MODE_PASSIVE);
+      break;
+    case 2:
+      ROS_INFO("[CREATE] SetMode 2 (Safe)");
+      robot_->setMode(create::MODE_SAFE);
+      break;
+    case 3:
+      ROS_INFO("[CREATE] SetMode 3 (Full)");
+      robot_->setMode(create::MODE_FULL);
+      break;
+    default:
+      ROS_ERROR("[CREATE] SetMode:  Invalid Mode %f", msg);
+      break;
+  }
 }
 
 void CreateDriver::cmdVelCallback(const geometry_msgs::TwistConstPtr& msg)
@@ -460,6 +490,15 @@ void CreateDriver::publishOdom()
   odom_msg_.twist.covariance[31] = vel.covariance[7];
   odom_msg_.twist.covariance[35] = vel.covariance[8];
 
+  // extremely large number fix
+  odom_msg_.pose.covariance[14] = default_covariance_;
+  odom_msg_.pose.covariance[21] = default_covariance_;
+  odom_msg_.pose.covariance[28] = default_covariance_;
+   
+  odom_msg_.twist.covariance[14] = default_covariance_;
+  odom_msg_.twist.covariance[21] = default_covariance_;
+  odom_msg_.twist.covariance[28] = default_covariance_;
+
   if (publish_tf_)
   {
     tf_odom_.header.stamp = ros::Time::now();
@@ -585,7 +624,7 @@ void CreateDriver::publishMode()
       mode_msg_.mode = mode_msg_.MODE_FULL;
       break;
     default:
-      ROS_ERROR("[CREATE] Unknown mode detected");
+//      ROS_ERROR("[CREATE] Unknown mode detected:  %f", mode_msg_.mode);
       break;
   }
   mode_pub_.publish(mode_msg_);
